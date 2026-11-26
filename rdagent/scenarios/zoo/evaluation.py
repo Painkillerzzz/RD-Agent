@@ -4,14 +4,63 @@ from __future__ import annotations
 import csv
 import json
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
 from rdagent.scenarios.zoo.conf import ZOO_PROP_SETTING as S
 
 
+REMOTE = bool(S.ssh.strip())
+
+
 def _p(x: str) -> Path:
+    if REMOTE:  # remote paths: expand "~" on the remote side, keep them as given here
+        return Path(x)
     return Path(os.path.expanduser(x)).resolve()
+
+
+def _rp(x) -> str:
+    """Path for a remote shell command, with ~ left for the remote shell to expand."""
+    s = str(x)
+    return s if not s.startswith("~") else "$HOME" + s[1:]
+
+
+def ssh(cmd: str, stdin: str | None = None, timeout: int = 900) -> subprocess.CompletedProcess:
+    return subprocess.run(["ssh", "-o", "BatchMode=yes", *shlex.split(S.ssh), cmd], input=stdin, capture_output=True,
+                          text=True, timeout=timeout)
+
+
+def read_text(path: Path) -> str:
+    if not REMOTE:
+        return path.read_text()
+    p = ssh(f'cat "{_rp(path)}"')
+    if p.returncode != 0:
+        raise FileNotFoundError(f"{path}: {p.stderr[-500:]}")
+    return p.stdout
+
+
+def push_spec(local: Path) -> str:
+    """Copy a spec to the evaluation machine; returns the path to use there."""
+    if not REMOTE:
+        return str(local)
+    remote = f"{_rp(WORK)}/specs/{local.name}"
+    p = ssh(f'mkdir -p "{_rp(WORK)}/specs" && cat > "{remote}"', stdin=local.read_text())
+    if p.returncode != 0:
+        raise RuntimeError(f"ssh copy failed: {p.stderr[-500:]}")
+    return remote
+
+
+def run(argv: list[str], cwd: Path, timeout: int) -> tuple[int, str]:
+    envs = {"PYTHONPATH": f"{_rp(REPO)}/validation", "ZOO_DATA": _rp(DATA)}
+    if not REMOTE:
+        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, env={**os.environ, **envs},
+                           cwd=str(cwd))
+    else:
+        line = " ".join(f'{k}="{v}"' for k, v in envs.items()) + " " + " ".join(
+            a if a.startswith("$HOME") else shlex.quote(a) for a in argv)
+        p = ssh(f'cd "{_rp(cwd)}" && {line}', timeout=timeout)
+    return p.returncode, p.stdout + p.stderr
 
 
 # keep the venv python unresolved: resolving its symlink would drop the venv
@@ -19,50 +68,48 @@ REPO, DATA, WORK, PY = _p(S.repo), _p(S.data), _p(S.work), os.path.expanduser(S.
 
 
 def parent_row(stem: str) -> dict:
-    with open(REPO / "research_results" / "specs.csv", newline="") as f:
-        for r in csv.DictReader(f):
-            if r["stem"] == stem:
-                return r
+    import io
+    for r in csv.DictReader(io.StringIO(read_text(REPO / "research_results" / "specs.csv"))):
+        if r["stem"] == stem:
+            return r
     return {}
 
 
 def parent_code(stem: str) -> str:
-    return (REPO / "research_results" / "specs" / f"{stem}.py").read_text()
+    return read_text(REPO / "research_results" / "specs" / f"{stem}.py")
 
 
 def family_of(stem: str) -> str:
     return S.family or parent_row(stem).get("family") or stem
 
 
-def env() -> dict:
-    return {**os.environ, "PYTHONPATH": str(REPO / "validation"), "ZOO_DATA": str(DATA)}
-
-
 def check(spec: Path, timeout: int = 900) -> tuple[bool, str]:
     """zoo_val.check on the synthetic fixture (schema, shape, truncate() causal check)."""
-    p = subprocess.run([PY, "-m", "zoo_val.check", str(spec)], capture_output=True, text=True, timeout=timeout,
-                       env=env(), cwd=str(REPO / "validation"))
-    out = (p.stdout + p.stderr)[-6000:]
-    ok = p.returncode == 0
+    rc, out = run([_rp(PY), "-m", "zoo_val.check", push_spec(spec)], REPO / "validation", timeout)
+    ok = rc == 0
     try:
-        ok = ok and json.loads(p.stdout[p.stdout.index("{"):]).get("ok", False)
+        ok = ok and json.loads(out[out.index("{"):out.rindex("}") + 1]).get("ok", False)
     except Exception:  # noqa: BLE001
         pass
-    return ok, out
+    return ok, out[-6000:]
 
 
 def evaluate(spec: Path, family: str, note: str = "", parent: str = "") -> dict:
     """Full devval run (fixture check, real-panel causal check, DEV, VAL, robustness). Returns the agent view."""
-    WORK.mkdir(parents=True, exist_ok=True)
     out = WORK / "agent_views" / f"{spec.stem}.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [PY, str(REPO / "blackbox" / "local" / "local_eval.py"), "--data", str(DATA), "--work", str(WORK / "eval"),
+    if REMOTE:
+        ssh(f'mkdir -p "{_rp(WORK)}/agent_views"')
+    else:
+        out.parent.mkdir(parents=True, exist_ok=True)
+    remote_spec = push_spec(spec)
+    cmd = [_rp(PY), f"{_rp(REPO)}/blackbox/local/local_eval.py", "--data", _rp(DATA), "--work", f"{_rp(WORK)}/eval",
            "--family", family, "--proposer", "rdagent", "--parent", parent, "--note", note[:480],
-           "--agent-json", str(out), str(spec)]
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=S.eval_timeout, env=env(), cwd=str(REPO))
-    if not out.exists():
-        return {"status": "failed", "error": (p.stdout + p.stderr)[-3000:]}
-    return json.loads(out.read_text())
+           "--agent-json", _rp(out), remote_spec]
+    rc, log = run(cmd, REPO, S.eval_timeout)
+    try:
+        return json.loads(read_text(out))
+    except Exception:  # noqa: BLE001
+        return {"status": "failed", "error": log[-3000:]}
 
 
 def score(view: dict | None) -> float | None:

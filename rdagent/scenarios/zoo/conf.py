@@ -26,6 +26,11 @@ class ZooPropSetting(BasePropSetting):
     python: str = "~/venvs/zoo/bin/python"
     """python with pandas/pyarrow/scipy/sklearn used to run zoo_val and the evaluator"""
 
+    # remote mode: run check/evaluation on another machine over plain ssh (no port forwarding needed)
+    ssh: str = ""
+    """e.g. "-p 22472 -o KexAlgorithms=curve25519-sha256 -o HostKeyAlgorithms=ssh-ed25519 painkillerzzz@10.213.74.1".
+    When set, repo/data/work/python are paths ON THAT MACHINE and only the LLM side runs locally."""
+
     # what to optimise
     parent: str = "r0100-crypto_hourly_institutional_footprints_ensemble"
     """stem of the starting spec in research_results/specs/"""

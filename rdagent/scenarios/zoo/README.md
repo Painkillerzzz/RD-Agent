@@ -17,3 +17,7 @@ bucket other than `fail`. The agent never sees VAL numbers, only the bucket and 
 Settings: `ZOO_REPO`, `ZOO_DATA` (research view cut at 2024-12-31), `ZOO_WORK`, `ZOO_PYTHON` (python with the zoo
 deps), `ZOO_PARENT`, `ZOO_FAMILY`, `ZOO_CODER_MAX_TRIES`, `ZOO_EVAL_TIMEOUT`, `ZOO_HISTORY_N`. Runbook for the
 training server: `tools/rdagent/SERVER.md` in quant-strategy-zoo.
+
+Remote mode: set `ZOO_SSH` (ssh arguments, e.g. `-p 22472 user@host`) to keep the LLM side on this machine and run
+`zoo_val.check` and the evaluator on the training server over plain ssh commands (no port forwarding). `ZOO_REPO`,
+`ZOO_DATA`, `ZOO_WORK`, `ZOO_PYTHON` are then paths on the server.

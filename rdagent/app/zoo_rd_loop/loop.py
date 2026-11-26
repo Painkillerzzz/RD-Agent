@@ -13,6 +13,7 @@ from pathlib import Path
 import fire
 
 from rdagent.components.workflow.rd_loop import RDLoop
+from rdagent.core.conf import RD_AGENT_SETTINGS
 from rdagent.core.exception import CoderError, RunnerError
 from rdagent.log import rdagent_logger as logger
 from rdagent.scenarios.zoo import evaluation as ev
@@ -26,11 +27,10 @@ class ZooRDLoop(RDLoop):
     def __init__(self, setting=ZOO_PROP_SETTING):
         super().__init__(setting)
         scen = self.trace.scen
-        cache = ev.WORK / "agent_views" / f"{setting.parent}.json"
-        if cache.exists():
-            scen.parent_view = json.loads(cache.read_text())
-        else:
-            spec = ev.WORK / "parents" / f"{setting.parent}.py"
+        try:  # baseline already evaluated (cached on the evaluation machine)
+            scen.parent_view = json.loads(ev.read_text(ev.WORK / "agent_views" / f"{setting.parent}.json"))
+        except Exception:  # noqa: BLE001
+            spec = Path(RD_AGENT_SETTINGS.workspace_path) / "zoo_parents" / f"{setting.parent}.py"
             spec.parent.mkdir(parents=True, exist_ok=True)
             spec.write_text(scen.parent_code)
             logger.info(f"evaluating parent {setting.parent} (baseline)")
