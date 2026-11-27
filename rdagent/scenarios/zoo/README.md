@@ -81,7 +81,7 @@ rejected with `val_budget_round` and the loop keeps exploring. Accepted specs ar
 
 Before `opt_gate.decide()`, `gate.same_vol()` scales the candidate's net series by L = parent DEV vol / candidate
 DEV vol (VAL keeps the DEV factor). Drawdown (arithmetic cumulative, exact under scaling), BTC beta and annual
-return are compared after scaling; Sharpe thresholds are unchanged. Extra rules: scaled annual return >= parent's on
-DEV (`dev_return`) and VAL (folded into `val_check_failed`), and L <= 2.0 (`dev_leverage`). opt_gate itself is not
+return are compared after scaling; Sharpe thresholds are unchanged. Extra rule: L <= 2.0 (`dev_leverage`). No separate
+return floor: at equal volatility annual return equals Sharpe x vol, which the Sharpe margins already cover. opt_gate itself is not
 changed; RD-Agent passes it already-scaled values. `python -m rdagent.scenarios.zoo.gate STEM PARENT` re-checks an
 accepted candidate under the current rules without charging a VAL query.

@@ -76,7 +76,7 @@ def same_vol(cand: dict, parent: dict) -> tuple[dict, list[str], list[str]]:
     """Same-volatility comparison (agreed 2026-11-27): the candidate's net series is scaled by
     L = parent DEV vol / candidate DEV vol (VAL keeps the DEV factor); drawdown (arithmetic cumulative, exact under
     scaling), BTC beta and annual return are compared after scaling. Returns (scaled candidate record, dev reasons,
-    val reasons)."""
+    val reasons). Extra rule: L <= MAX_LEVERAGE_RATIO."""
     c = {"dev": dict(cand["dev"]), "val": dict(cand["val"]), "gates": cand.get("gates")}
     pv, cv = _num(parent["dev"].get("ann_vol")), _num(cand["dev"].get("ann_vol"))
     if not pv or not cv:
@@ -91,9 +91,7 @@ def same_vol(cand: dict, parent: dict) -> tuple[dict, list[str], list[str]]:
         for k in ("dd_arith", "beta_btc", "ann_return"):
             if _num(d.get(k)) is not None:
                 d[k] = d[k] * L
-        cr, pr = _num(d.get("ann_return")), _num(parent[part].get("ann_return"))
-        if cr is not None and pr is not None and cr < pr:
-            (dev_r if part == "dev" else val_r).append(f"{part}_return")
+    # no separate return floor: at equal volatility annual return is Sharpe x vol, already covered by the Sharpe margins
     return c, dev_r, val_r
 
 
