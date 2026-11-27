@@ -40,6 +40,8 @@ class ZooPropSetting(BasePropSetting):
     coder_max_tries: int = 4
     """LLM rewrite attempts until zoo_val.check passes"""
     eval_timeout: int = 7200
+    token_budget: int = 200_000
+    """hard cap on estimated LLM tokens (input + output) for this workspace; 0 = unlimited"""
     history_n: int = 8
     """how many past loops are shown to the planner"""
 

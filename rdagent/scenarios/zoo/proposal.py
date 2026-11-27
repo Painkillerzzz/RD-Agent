@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from rdagent.core.proposal import Hypothesis, Hypothesis2Experiment, HypothesisGen, Trace
-from rdagent.oai.llm_utils import APIBackend
+from rdagent.scenarios.zoo import llm
 from rdagent.scenarios.zoo import evaluation as ev
 from rdagent.scenarios.zoo.conf import ZOO_PROP_SETTING as S
 from rdagent.scenarios.zoo.experiment import ZooSpecExperiment, ZooSpecTask
@@ -46,8 +46,7 @@ class ZooHypothesisGen(HypothesisGen):
         user = (f"{self.scen.get_scenario_all_desc()}\n\n# Current best spec\n```python\n{code}\n```\n"
                 f"# Its evaluation\n{ev.brief(view)}\n\n# Recent iterations\n{history_text(trace, S.history_n)}\n\n"
                 "Propose the next modification.")
-        resp = APIBackend().build_messages_and_create_chat_completion(user_prompt=user, system_prompt=SYSTEM,
-                                                                      json_mode=True)
+        resp = llm.chat(user, SYSTEM, json_mode=True)
         d = json.loads(resp)
         return Hypothesis(hypothesis=str(d.get("hypothesis", "")), reason=str(d.get("reason", "")),
                           concise_reason=str(d.get("concise_reason", "")),

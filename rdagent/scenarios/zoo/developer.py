@@ -6,7 +6,7 @@ from pathlib import Path
 from rdagent.core.developer import Developer
 from rdagent.core.exception import CoderError, RunnerError
 from rdagent.log import rdagent_logger as logger
-from rdagent.oai.llm_utils import APIBackend
+from rdagent.scenarios.zoo import llm
 from rdagent.scenarios.zoo import evaluation as ev
 from rdagent.scenarios.zoo.conf import ZOO_PROP_SETTING as S
 from rdagent.scenarios.zoo.experiment import ZooSpecExperiment
@@ -33,8 +33,7 @@ class ZooSpecCoder(Developer[ZooSpecExperiment]):
                   f"# Hypothesis to implement\n{task.description}\n\nNew SPEC['id']: {task.stem}")
         log = ""
         for i in range(S.coder_max_tries):
-            resp = APIBackend().build_messages_and_create_chat_completion(user_prompt=prompt, system_prompt=CODER_SYSTEM,
-                                                                          former_messages=msgs)
+            resp = llm.chat(prompt, CODER_SYSTEM, former_messages=msgs)
             code = extract_code(resp)
             spec_path.write_text(code)
             ws.inject_files(**{ws.SPEC_FILE: code})

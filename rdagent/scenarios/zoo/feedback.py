@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from rdagent.core.proposal import Experiment2Feedback, HypothesisFeedback, Trace
-from rdagent.oai.llm_utils import APIBackend
+from rdagent.scenarios.zoo import llm
 from rdagent.scenarios.zoo import evaluation as ev
 from rdagent.scenarios.zoo.proposal import sota_code_and_view
 
@@ -21,8 +21,9 @@ class ZooFeedback(Experiment2Feedback):
                 f"New result: {ev.brief(exp.result)}\nCurrent best: {ev.brief(best_view)}\n"
                 f"Rule decision: {'ACCEPT' if decision else 'REJECT'} (new score {new_s}, best score {best_s})")
         try:
-            d = json.loads(APIBackend().build_messages_and_create_chat_completion(user_prompt=user, system_prompt=SYSTEM,
-                                                                                  json_mode=True))
+            d = json.loads(llm.chat(user, SYSTEM, json_mode=True))
+        except llm.TokenBudgetExceeded:
+            raise
         except Exception as e:  # noqa: BLE001
             d = {"reason": f"feedback LLM failed: {e}"}
         return HypothesisFeedback(reason=str(d.get("reason", "")), decision=decision,
