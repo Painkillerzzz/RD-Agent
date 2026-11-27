@@ -21,3 +21,20 @@ training server: `tools/rdagent/SERVER.md` in quant-strategy-zoo.
 Remote mode: set `ZOO_SSH` (ssh arguments, e.g. `-p 22472 user@host`) to keep the LLM side on this machine and run
 `zoo_val.check` and the evaluator on the training server over plain ssh commands (no port forwarding). `ZOO_REPO`,
 `ZOO_DATA`, `ZOO_WORK`, `ZOO_PYTHON` are then paths on the server.
+
+## Running with kimi-k3 on infini-ai (tested 2026-11-27)
+
+```bash
+source ~/rdagent-public-20261123/miniconda/bin/activate rdagent4qlib
+set -a; source ~/.k3.env; set +a
+export OPENAI_API_KEY=$K3_KEY OPENAI_API_BASE=https://cloud.infini-ai.com/maas/v1/ CHAT_MODEL=openai/kimi-k3 \
+  CHAT_TEMPERATURE=1.0 `# kimi-k3 thinking mode rejects any other temperature (HTTP 400)` \
+  MAX_RETRY=2 LITELLM_LOCAL_MODEL_COST_MAP=True \
+  ZOO_REPO=$HOME/quant-strategy-zoo ZOO_DATA=/datasets/data2/research/data ZOO_WORK=$HOME/zoo_rd_work \
+  ZOO_PYTHON=$HOME/venvs/zoo/bin/python ZOO_EVAL_THREADS=2 OMP_NUM_THREADS=2 \
+  ZOO_TOKEN_BUDGET=200000 WORKSPACE_PATH=$HOME/zoo_rd_work/ws
+rdagent zoo_spec --parent r0120-c-crypto_hourly_absorbed_flow_reversal --loop-n 1
+```
+
+Estimated token usage accumulates in `$WORKSPACE_PATH/zoo_token_usage.json` (delete it to reset the budget).
+One kimi-k3 round on r0120-c used ~9.5k input + 2.5k output tokens (~$0.07 at $3/$15 per 1M) plus ~17 min of evaluation.
