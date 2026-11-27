@@ -38,3 +38,10 @@ rdagent zoo_spec --parent r0120-c-crypto_hourly_absorbed_flow_reversal --loop-n 
 
 Estimated token usage accumulates in `$WORKSPACE_PATH/zoo_token_usage.json` (delete it to reset the budget).
 One kimi-k3 round on r0120-c used ~9.5k input + 2.5k output tokens (~$0.07 at $3/$15 per 1M) plus ~17 min of evaluation.
+
+## Submitting jobs to the training server (do this, not a raw nohup)
+
+Use `bin/zoo_spec_job.sh`: it detaches from ssh, has a hard timeout, and writes `~/zoo_rd_work/jobs/<name>.status`
+(`state=running`, then `state=done|failed exit=… usage=…`). Whoever launches a job must also schedule its own check
+at the expected finish time (eval ≈ 17 min per round) and read only the status file plus a log tail in one short ssh
+call. Never keep an ssh connection open to wait, and never rely on a session "remembering" to look later.
