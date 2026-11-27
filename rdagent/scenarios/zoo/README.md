@@ -76,3 +76,12 @@ so litellm returns usage; reasoning tokens count as output). Prices: `ZOO_PRICE_
 VAL queries: max 3 per strategy per `ZOO_VAL_ROUND_ITERS` (10) iterations; beyond that a DEV-passing candidate is
 rejected with `val_budget_round` and the loop keeps exploring. Accepted specs are copied to
 `~/zoo_rd_work/accepted/<parent>/`.
+
+## Same-volatility comparison (2026-11-27, agreed by the owner)
+
+Before `opt_gate.decide()`, `gate.same_vol()` scales the candidate's net series by L = parent DEV vol / candidate
+DEV vol (VAL keeps the DEV factor). Drawdown (arithmetic cumulative, exact under scaling), BTC beta and annual
+return are compared after scaling; Sharpe thresholds are unchanged. Extra rules: scaled annual return >= parent's on
+DEV (`dev_return`) and VAL (folded into `val_check_failed`), and L <= 2.0 (`dev_leverage`). opt_gate itself is not
+changed; RD-Agent passes it already-scaled values. `python -m rdagent.scenarios.zoo.gate STEM PARENT` re-checks an
+accepted candidate under the current rules without charging a VAL query.
