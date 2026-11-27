@@ -65,3 +65,14 @@ is charged (`charge_val_query`, max 3 per strategy and `ZOO_VAL_ROUND`, default 
 when the budget is used) and `decide()` runs on the sealed record. The LLM gets the DEV-only agent view
 (`local_eval.py --dev-only`: no VAL, no gate booleans, no verdict) and the gate's pass/fail with coarse reasons.
 VAL numbers live only in `$ZOO_WORK/sealed/` (evaluator work dir and per-spec sealed records, incl. BTC beta).
+
+## Continuous runs with a shared dollar budget
+
+`bin/zoo_continuous.sh <name> <parent> <zoo_fm|zoo_spec>` with `ZOO_USD_BUDGET=50` keeps one strategy's loop running,
+resumes the RD-Agent session after crashes and stops when the budget shared by all jobs
+(`~/zoo_rd_work/llm_usage_usd.json`, file-locked) is reached. Each call first reserves its worst case
+(`ZOO_RESERVE_OUT_TOKENS` output tokens) and is then settled with the provider-reported usage (`CHAT_STREAM=False`
+so litellm returns usage; reasoning tokens count as output). Prices: `ZOO_PRICE_IN` / `ZOO_PRICE_OUT` (USD per 1M).
+VAL queries: max 3 per strategy per `ZOO_VAL_ROUND_ITERS` (10) iterations; beyond that a DEV-passing candidate is
+rejected with `val_budget_round` and the loop keeps exploring. Accepted specs are copied to
+`~/zoo_rd_work/accepted/<parent>/`.

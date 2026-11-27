@@ -42,15 +42,28 @@ class ZooFeedback(Experiment2Feedback):
         if exp.result is None or (exp.result or {}).get("status") != "ok" or not (cand and par and orig):
             g = {"status": "fail", "pass": False, "reasons": ["not_evaluated"], "flags": []}
         else:
-            g = gate.decide(stem, cand, par, orig, self.scen.val_round)
+            rid = f"{self.scen.val_round}-b{len(trace.hist) // max(S.val_round_iters, 1)}"
+            try:
+                g = gate.decide(stem, cand, par, orig, rid)
+            except gate.ValBudgetExhausted:  # no VAL information this time; keep exploring on DEV
+                g = {"status": "fail", "pass": False, "reasons": ["val_budget_round"], "flags": ["val_not_queried"]}
         exp.gate = g
         decision = bool(g.get("pass"))
+        if decision:  # keep every accepted spec (code + gate verdict, no numbers) for review
+            try:
+                from pathlib import Path
+                d = Path(S.work).expanduser() / "accepted" / S.parent
+                d.mkdir(parents=True, exist_ok=True)
+                (d / f"{stem}.py").write_text(exp.experiment_workspace.spec_code)
+                (d / f"{stem}.gate.json").write_text(json.dumps(g))
+            except Exception:  # noqa: BLE001
+                pass
         user = (f"Hypothesis: {exp.hypothesis.hypothesis if exp.hypothesis else ''}\n"
                 f"New result: {ev.brief(exp.result)}\nCurrent best ({parent_stem}): {ev.brief(best_view(trace, self.scen))}\n"
                 f"Decision: {'ACCEPT' if decision else 'REJECT'}; {gate_text(g)}")
         try:
             d = json.loads(llm.chat(user, SYSTEM, json_mode=True))
-        except llm.TokenBudgetExceeded:
+        except (llm.TokenBudgetExceeded, llm.UsdBudgetExceeded):
             raise
         except Exception as e:  # noqa: BLE001
             d = {"reason": f"feedback LLM failed: {e}"}

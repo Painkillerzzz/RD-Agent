@@ -47,6 +47,19 @@ class ZooPropSetting(BasePropSetting):
     eval_timeout: int = 7200
     token_budget: int = 200_000
     """hard cap on estimated LLM tokens (input + output) for this workspace; 0 = unlimited"""
+    usd_budget: float = 0.0
+    """hard cap in USD over ALL zoo jobs sharing usage_file (reservation before each call, settled with the
+    provider-reported usage when available); 0 = off"""
+    usage_file: str = ""
+    """shared USD/token ledger; empty = <work>/llm_usage_usd.json"""
+    price_in: float = 3.0
+    """USD per 1M input tokens (kimi-k3 list price; set to the provider's real price)"""
+    price_out: float = 15.0
+    """USD per 1M output tokens (reasoning tokens are billed as output)"""
+    reserve_out_tokens: int = 16000
+    """output tokens reserved per call before sending it (budget never overshoots by more than one call)"""
+    val_round_iters: int = 10
+    """a VAL-query round spans this many iterations (opt_gate allows MAX_VAL_QUERIES per round)"""
     history_n: int = 8
     """how many past loops are shown to the planner"""
 
