@@ -33,7 +33,8 @@ while :; do
   [ -d "$R/log/__session__" ] && ARGS+=(--path "$R/log/__session__")
   echo "state=running parent=$PARENT cmd=$CMD usd=$U resume=$([ -d "$R/log/__session__" ] && echo yes || echo no) start=$(date -u +%FT%TZ)" >> "$ST"
   t0=$(date +%s)
-  timeout ${JOB_TIMEOUT:-48h} rdagent "$CMD" "${ARGS[@]}" >> "$LOG" 2>&1
+  # --foreground keeps rdagent in this script's process group, so kill -TERM -- -<driver pgid> stops everything
+  timeout --foreground ${JOB_TIMEOUT:-48h} rdagent "$CMD" "${ARGS[@]}" >> "$LOG" 2>&1
   RC=$?; dt=$(( $(date +%s) - t0 ))
   echo "state=exited exit=$RC secs=$dt usd=$(usd) at=$(date -u +%FT%TZ)" >> "$ST"
   if [ $dt -lt 300 ]; then fails=$((fails+1)); else fails=0; fi
