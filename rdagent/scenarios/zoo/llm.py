@@ -14,6 +14,28 @@ from rdagent.oai.llm_utils import APIBackend
 from rdagent.scenarios.zoo.conf import ZOO_PROP_SETTING as S
 
 
+def _fix_litellm_types() -> None:
+    """litellm 1.97 + pydantic 2.14: Message/ModelResponse have unresolved forward refs
+    (ChatCompletionReasoningSummaryTextBlock) and cannot be instantiated. Rebuild them once."""
+    try:
+        import litellm  # noqa: F401
+        import litellm.types.llms.openai as lo
+        import litellm.types.utils as tu
+    except Exception:  # noqa: BLE001
+        return
+    ns = {**vars(lo), **vars(tu)}
+    for n in ("Delta", "Message", "Choices", "StreamingChoices", "ModelResponse"):
+        c = getattr(tu, n, None)
+        if c is not None and hasattr(c, "model_rebuild"):
+            try:
+                c.model_rebuild(force=True, _types_namespace=ns)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"litellm type rebuild failed for {n}: {e}")
+
+
+_fix_litellm_types()
+
+
 class TokenBudgetExceeded(RuntimeError):
     pass
 
@@ -42,9 +64,12 @@ def chat(user_prompt: str, system_prompt: str | None = None, former_messages: li
     if S.token_budget and u["input"] + u["output"] + inp > S.token_budget:
         raise TokenBudgetExceeded(f"token budget {S.token_budget} would be exceeded (used {u})")
     kw = {"json_mode": True} if json_mode else {}
+    # count the request before sending it, so failed calls (which may still be billed) are counted too
+    u = {"input": u["input"] + inp, "output": u["output"], "calls": u["calls"] + 1}
+    _path().write_text(json.dumps(u))
     resp = APIBackend().build_messages_and_create_chat_completion(
         user_prompt=user_prompt, system_prompt=system_prompt, former_messages=former_messages or [], **kw)
-    u = {"input": u["input"] + inp, "output": u["output"] + _est(resp), "calls": u["calls"] + 1}
+    u["output"] += _est(resp)
     _path().write_text(json.dumps(u))
     logger.info(f"zoo llm usage (estimated tokens): {u}")
     return resp
