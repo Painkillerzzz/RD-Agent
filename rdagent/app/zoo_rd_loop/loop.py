@@ -17,7 +17,7 @@ from rdagent.core.conf import RD_AGENT_SETTINGS
 from rdagent.core.exception import CoderError, RunnerError
 from rdagent.log import rdagent_logger as logger
 from rdagent.scenarios.zoo import evaluation as ev
-from rdagent.scenarios.zoo.conf import ZOO_PROP_SETTING
+from rdagent.scenarios.zoo.conf import ZOO_PROP_SETTING, ZooFMPropSetting
 
 
 class ZooRDLoop(RDLoop):
@@ -36,6 +36,9 @@ class ZooRDLoop(RDLoop):
             logger.info(f"evaluating parent {setting.parent} (baseline)")
             scen.parent_view = ev.evaluate(spec, scen.family, note="baseline: parent spec unchanged")
         logger.info(f"parent baseline: {ev.brief(scen.parent_view)}")
+        if isinstance(setting, ZooFMPropSetting):
+            from rdagent.scenarios.zoo import fm
+            scen.fm_seed = fm.seed_from_parent(scen.parent_code)
 
 
 def main(parent: str | None = None, path=None, step_n: int | None = None, loop_n: int | None = None,
@@ -43,6 +46,17 @@ def main(parent: str | None = None, path=None, step_n: int | None = None, loop_n
     if parent:
         ZOO_PROP_SETTING.parent = parent
     loop = ZooRDLoop(ZOO_PROP_SETTING) if path is None else ZooRDLoop.load(path, checkout=checkout)
+    asyncio.run(loop.run(step_n=step_n, loop_n=loop_n, all_duration=all_duration))
+
+
+def main_fm(parent: str | None = None, path=None, step_n: int | None = None, loop_n: int | None = None,
+            all_duration: str | None = None, checkout: bool = True):
+    """Factor + model + portfolio loop: a Thompson bandit picks the layer each iteration."""
+    setting = ZooFMPropSetting()
+    if parent:
+        setting.parent = parent
+    ZOO_PROP_SETTING.parent = setting.parent  # modules read ZOO_PROP_SETTING
+    loop = ZooRDLoop(setting) if path is None else ZooRDLoop.load(path, checkout=checkout)
     asyncio.run(loop.run(step_n=step_n, loop_n=loop_n, all_duration=all_duration))
 
 

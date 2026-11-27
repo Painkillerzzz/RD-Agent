@@ -127,6 +127,21 @@ def zoo_spec_cli(
     zoo_spec(parent=parent, path=path, step_n=step_n, loop_n=loop_n, all_duration=all_duration, checkout=checkout)
 
 
+@app.command(name="zoo_fm")
+def zoo_fm_cli(
+    parent: Optional[str] = None,
+    path: Optional[str] = None,
+    step_n: Optional[int] = None,
+    loop_n: Optional[int] = None,
+    all_duration: Optional[str] = None,
+    checkout: CheckoutOption = True,
+):
+    """Factor + model + portfolio loop on a zoo xs spec; a bandit picks the layer each iteration."""
+    from rdagent.app.zoo_rd_loop.loop import main_fm
+
+    main_fm(parent=parent, path=path, step_n=step_n, loop_n=loop_n, all_duration=all_duration, checkout=checkout)
+
+
 @app.command(name="fin_factor_report")
 def fin_factor_report_cli(
     report_folder: Optional[str] = None,

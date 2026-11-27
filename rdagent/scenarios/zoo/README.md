@@ -45,3 +45,14 @@ Use `bin/zoo_spec_job.sh`: it detaches from ssh, has a hard timeout, and writes 
 (`state=running`, then `state=done|failed exit=… usage=…`). Whoever launches a job must also schedule its own check
 at the expected finish time (eval ≈ 17 min per round) and read only the status file plus a log tail in one short ssh
 call. Never keep an ssh connection open to wait, and never rely on a session "remembering" to look later.
+
+## Factor + model loop (`rdagent zoo_fm`, xs parents only)
+
+Keeps RD-Agent(Q)'s factor/model co-evolution but evaluates with the zoo evaluator. The parent signal becomes factor
+`parent`; the model starts as an equal-weight rank mean; the portfolio is the parent SPEC. Each iteration a Gaussian
+Thompson bandit (`fm.ArmBandit`) picks one layer: **factor** (add/replace one `fac_<name>`, max 8), **model**
+(rewrite `combine(F, bundle, params)`, e.g. purged walk-forward ridge/HGB) or **portfolio** (SPEC/universe knobs, no
+code). `fm.assemble` renders one ordinary spec module, so zoo_val.check, the evaluator and the score are unchanged.
+Unlike the qlib bandit, the reward is the score improvement over the best at proposal time (failures = -0.5), and
+the bandit state is replayed from the trace, so resumed sessions stay consistent. Launch like zoo_spec:
+`bin/zoo_spec_job.sh` style with `rdagent zoo_fm --parent <xs stem> --loop-n N`.
