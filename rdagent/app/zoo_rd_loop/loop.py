@@ -33,9 +33,14 @@ class ZooRDLoop(RDLoop):
         scen.val_round = setting.val_round or time.strftime("run-%Y%m%dT%H%M%SZ", time.gmtime())
         try:  # baseline already evaluated with the DEV-only view and a sealed record (cached on the evaluation machine)
             scen.parent_view = json.loads(ev.read_text(ev.WORK / "agent_views" / f"{setting.parent}.json"))
-            if "val" in scen.parent_view or gate.sealed(setting.parent) is None:
-                raise ValueError("old-style baseline (VAL visible or no sealed record): re-evaluate")
         except Exception:  # noqa: BLE001
+            scen.parent_view = None
+        if scen.parent_view is None or "val" in scen.parent_view or gate.sealed(setting.parent) is None:
+            # same evaluator, same data: reuse the earlier result, only re-split it into DEV view + sealed record
+            scen.parent_view = ev.backfill(setting.parent)
+            if scen.parent_view is not None:
+                logger.info(f"parent {setting.parent}: views rebuilt from the existing result (no re-run)")
+        if scen.parent_view is None or gate.sealed(setting.parent) is None:
             spec = Path(RD_AGENT_SETTINGS.workspace_path) / "zoo_parents" / f"{setting.parent}.py"
             spec.parent.mkdir(parents=True, exist_ok=True)
             spec.write_text(scen.parent_code)

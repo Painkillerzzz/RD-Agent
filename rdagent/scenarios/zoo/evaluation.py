@@ -113,6 +113,26 @@ def evaluate(spec: Path, family: str, note: str = "", parent: str = "") -> dict:
         return {"status": "failed", "error": log[-3000:]}
 
 
+def backfill(stem: str) -> dict | None:
+    """Rebuild the DEV-only view and sealed record of an already evaluated zoo spec without re-running it."""
+    out = WORK / "agent_views" / f"{stem}.json"
+    spec = REPO / "research_results" / "specs" / f"{stem}.py"
+    cmd = [_rp(PY), f"{_rp(REPO)}/blackbox/local/local_eval.py", "--data", _rp(DATA), "--work", f"{_rp(WORK)}/sealed/eval",
+           "--backfill", "--agent-json", _rp(out), "--dev-only", "--sealed-json", _rp(WORK / "sealed" / f"{stem}.json"),
+           _rp(spec)]
+    if REMOTE:
+        ssh(f'mkdir -p "{_rp(WORK)}/agent_views"')
+    else:
+        out.parent.mkdir(parents=True, exist_ok=True)
+    rc, _ = run(cmd, REPO, 600)
+    if rc != 0:
+        return None
+    try:
+        return json.loads(read_text(out))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def score(view: dict | None) -> float | None:
     """DEV-only objective (bandit reward / ranking hint): mean of DEV Sharpe and the worst DEV Sharpe under +-20%
     parameter moves; None unless the run is ok and DEV t >= 2. Acceptance itself is opt_gate.decide (gate.py)."""
