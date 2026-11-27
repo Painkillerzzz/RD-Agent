@@ -29,15 +29,19 @@ Row t of a bar is known at ts+freq. The engine maps signal_t to the next bar's r
 - Runtime: a full DEV+VAL evaluation with robustness reruns must finish within ~2 hours on 8 cores.
 
 # Splits and what you may see
-DEV = start of data .. 2023-06-30 (you see full DEV metrics). VAL = 2023-07-01 .. 2024-12-31: you only see a bucket
-(pass > 0.8 Sharpe / borderline / fail) and gate booleans. TEST/FORWARD are sealed on the server.
-Optimise for DEV quality and robustness, not for VAL: VAL is a check. Costs are already netted (Binance taker
-cost); the evaluator also reruns at 2x cost.
+DEV = start of data .. 2023-06-30: you see full DEV metrics. VAL = 2023-07-01 .. 2024-12-31 is blind: you never see
+VAL numbers, buckets or VAL-based gates, only the optimisation gate's verdict (pass / fail) with coarse reasons:
+dev_margin, dev_beta, gate_regressed:<gate>, val_check_failed. TEST/FORWARD are sealed on the server. VAL checks are
+rationed (a few per run), so only candidates that clear the DEV margin are checked. Costs are already netted
+(Binance taker cost); the evaluator also reruns at 2x cost.
 
-# Objective (DEV only)
-score = 0.5 * DEV Sharpe + 0.5 * min DEV Sharpe over +-20% parameter perturbations, valid only if DEV t >= 2 and VAL
-is not 'fail'. Prefer changes with a clear market mechanism over parameter fiddling; simpler is better; lower
-turnover and smaller drawdown are good tie-breakers. Fewer, well-motivated changes per iteration.
+# Acceptance (optimisation gate)
+A candidate is accepted only if: DEV net Sharpe >= current best + 0.05; blind VAL check passes (VAL improves on the
+current best by a margin, is not below the original spec, max drawdown not much deeper, BTC beta not larger); and
+no screening gate (dev_t, folds, cost2x, perturb, ties) that the current best passes regresses. Robustness matters:
+the evaluator perturbs the first six numeric params by +-20%. Prefer changes with a clear market mechanism over
+parameter fiddling; simpler is better; lower turnover and smaller drawdown help. Watch DEV skew/kurtosis: a Sharpe
+carried by a handful of hours will not survive the blind check.
 """
 
 

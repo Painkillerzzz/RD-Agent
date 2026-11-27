@@ -102,9 +102,10 @@ def evaluate(spec: Path, family: str, note: str = "", parent: str = "") -> dict:
     else:
         out.parent.mkdir(parents=True, exist_ok=True)
     remote_spec = push_spec(spec)
-    cmd = [_rp(PY), f"{_rp(REPO)}/blackbox/local/local_eval.py", "--data", _rp(DATA), "--work", f"{_rp(WORK)}/eval",
+    cmd = [_rp(PY), f"{_rp(REPO)}/blackbox/local/local_eval.py", "--data", _rp(DATA), "--work", f"{_rp(WORK)}/sealed/eval",
            "--family", family, "--proposer", "rdagent", "--parent", parent, "--note", note[:480],
-           "--agent-json", _rp(out), remote_spec]
+           "--agent-json", _rp(out), "--dev-only", "--sealed-json", _rp(WORK / "sealed" / f"{spec.stem}.json"),
+           remote_spec]
     rc, log = run(cmd, REPO, S.eval_timeout)
     try:
         return json.loads(read_text(out))
@@ -113,12 +114,12 @@ def evaluate(spec: Path, family: str, note: str = "", parent: str = "") -> dict:
 
 
 def score(view: dict | None) -> float | None:
-    """DEV-only objective: mean of DEV Sharpe and the worst DEV Sharpe under +-20% parameter moves.
-    Disqualified (None) unless the run is ok, DEV t >= 2 and VAL is not 'fail'."""
+    """DEV-only objective (bandit reward / ranking hint): mean of DEV Sharpe and the worst DEV Sharpe under +-20%
+    parameter moves; None unless the run is ok and DEV t >= 2. Acceptance itself is opt_gate.decide (gate.py)."""
     if not view or view.get("status") != "ok":
         return None
     dev = view.get("dev") or {}
-    if (dev.get("t_stat") or -9) < 2 or ((view.get("val") or {}).get("bucket") == "fail"):
+    if (dev.get("t_stat") or -9) < 2:
         return None
     sh, pm = dev.get("sharpe"), view.get("dev_perturb_min")
     if sh is None:
@@ -133,9 +134,10 @@ def brief(view: dict | None) -> str:
         err = view.get("error") or view.get("check") or view.get("real_causal") or ""
         return f"status={view.get('status')} {str(err)[:800]}"
     d = view.get("dev") or {}
-    g = view.get("gates") or {}
-    return (f"DEV sharpe={d.get('sharpe'):.3f} t={d.get('t_stat'):.2f} maxdd={d.get('max_drawdown'):.3f} "
-            f"turnover_ann={d.get('turnover_ann'):.1f} gross={d.get('gross_exposure_avg')} "
-            f"by_year={d.get('sharpe_by_year')} | DEV perturb_min={view.get('dev_perturb_min')} "
-            f"fold_pos={view.get('dev_fold_pos')} | VAL bucket={(view.get('val') or {}).get('bucket')} | "
-            f"verdict={view.get('verdict')} gates={ {k: v for k, v in g.items()} } | score={score(view)}")
+    f = lambda x, p=3: "n/a" if x is None else f"{x:.{p}f}"  # noqa: E731
+    ric = (d.get("rank_ic") or {})
+    return (f"DEV sharpe={f(d.get('sharpe'))} t={f(d.get('t_stat'), 2)} maxdd={f(d.get('max_drawdown'))} "
+            f"gross_sharpe={f(d.get('gross_sharpe'))} turnover_ann={f(d.get('turnover_ann'), 1)} "
+            f"skew={f(d.get('skew'), 2)} kurt={f(d.get('kurt'), 1)} rank_ic={f(ric.get('mean'), 4)} "
+            f"by_year={d.get('sharpe_by_year')} | DEV perturb_min={f(view.get('dev_perturb_min'))} "
+            f"fold_pos={view.get('dev_fold_pos')} | dev_objective={f(score(view))}")

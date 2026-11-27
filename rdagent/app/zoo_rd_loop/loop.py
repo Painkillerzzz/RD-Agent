@@ -27,8 +27,14 @@ class ZooRDLoop(RDLoop):
     def __init__(self, setting=ZOO_PROP_SETTING):
         super().__init__(setting)
         scen = self.trace.scen
-        try:  # baseline already evaluated (cached on the evaluation machine)
+        import time
+
+        from rdagent.scenarios.zoo import gate
+        scen.val_round = setting.val_round or time.strftime("run-%Y%m%dT%H%M%SZ", time.gmtime())
+        try:  # baseline already evaluated with the DEV-only view and a sealed record (cached on the evaluation machine)
             scen.parent_view = json.loads(ev.read_text(ev.WORK / "agent_views" / f"{setting.parent}.json"))
+            if "val" in scen.parent_view or gate.sealed(setting.parent) is None:
+                raise ValueError("old-style baseline (VAL visible or no sealed record): re-evaluate")
         except Exception:  # noqa: BLE001
             spec = Path(RD_AGENT_SETTINGS.workspace_path) / "zoo_parents" / f"{setting.parent}.py"
             spec.parent.mkdir(parents=True, exist_ok=True)

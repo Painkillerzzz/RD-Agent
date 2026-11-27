@@ -15,13 +15,11 @@ history shows), concise_justification, concise_knowledge (a reusable lesson, "if
 
 
 def sota(trace: Trace):
-    """Best accepted experiment so far, or None (then the parent spec is the SOTA)."""
-    best, best_s = None, None
-    for exp, fb in trace.hist:
-        s = ev.score(getattr(exp, "result", None))
-        if fb.decision and s is not None and (best_s is None or s > best_s):
-            best, best_s = exp, s
-    return best
+    """Latest accepted experiment (each acceptance had to beat its parent through opt_gate), or None (= parent)."""
+    for exp, fb in reversed(trace.hist):
+        if fb.decision:
+            return exp
+    return None
 
 
 def sota_code_and_view(trace: Trace, scen) -> tuple[str, dict | None]:

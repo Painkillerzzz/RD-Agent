@@ -66,6 +66,8 @@ class ZooFMCoder(Developer[ZooSpecExperiment]):
         for i in range(S.coder_max_tries):
             resp = llm.chat(prompt, CODER_SYSTEM, former_messages=msgs)
             code, newp = extract_code(resp), _json_block(resp)
+            if arm == "factor":  # the LLM may name the function differently: force the assigned name
+                code = re.sub(r"^def fac_\w+\(", f"def fac_{name}(", code, count=1, flags=re.M)
             st = {**base, "factors": dict(base["factors"]), "params": {**base["params"], **newp}}
             if arm == "factor":
                 rep = extra.get("replace")

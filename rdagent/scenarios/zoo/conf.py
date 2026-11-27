@@ -37,6 +37,11 @@ class ZooPropSetting(BasePropSetting):
     family: str = ""
     """evaluator family; empty = take it from research_results/specs.csv for the parent"""
 
+    gate_dir: str = "~/zoo-opt/research_opt"
+    """directory with opt_gate.py (acceptance gate, VAL query budget, sealed/ outputs)"""
+    val_round: str = ""
+    """VAL query budget bucket (opt_gate counts MAX_VAL_QUERIES per strategy and round); empty = one per run"""
+
     coder_max_tries: int = 4
     """LLM rewrite attempts until zoo_val.check passes"""
     eval_timeout: int = 7200

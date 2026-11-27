@@ -31,25 +31,23 @@ concise_justification, concise_knowledge (a reusable "if ... then ..." lesson). 
 
 
 def best(trace: Trace, scen):
-    """(state, view) of the best accepted experiment, else the seeded parent."""
-    b, bs = None, None
-    for exp, fb in trace.hist:
-        s = ev.score(getattr(exp, "result", None))
-        if fb.decision and s is not None and (bs is None or s > bs):
-            b, bs = exp, s
-    if b is not None:
-        return b.fm_state, b.result
+    """(state, view) of the latest accepted experiment (each had to beat its parent), else the seeded parent."""
+    for exp, fb in reversed(trace.hist):
+        if fb.decision:
+            return exp.fm_state, exp.result
     return scen.fm_seed, getattr(scen, "parent_view", None)
 
 
 def bandit_from_trace(trace: Trace) -> fm.ArmBandit:
-    """Replays the history: reward = score - best score at proposal time (failed or disqualified = -0.5)."""
+    """Replays the history. Reward = DEV objective - best DEV objective at proposal time, +0.5 if the gate accepted;
+    failed / not evaluable = -0.5."""
     bd = fm.ArmBandit(seed=len(trace.hist))
-    for exp, _ in trace.hist:
+    for exp, fb in trace.hist:
         arm = getattr(exp, "arm", None)
         if arm in fm.ARMS:
             s, b = ev.score(getattr(exp, "result", None)), getattr(exp, "best_score_before", None)
-            bd.update(arm, -0.5 if s is None else s - (b or 0.0))
+            r = -0.5 if s is None else s - (b or 0.0)
+            bd.update(arm, r + (0.5 if fb.decision else 0.0))
     return bd
 
 

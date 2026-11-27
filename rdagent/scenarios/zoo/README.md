@@ -56,3 +56,12 @@ code). `fm.assemble` renders one ordinary spec module, so zoo_val.check, the eva
 Unlike the qlib bandit, the reward is the score improvement over the best at proposal time (failures = -0.5), and
 the bandit state is replayed from the trace, so resumed sessions stay consistent. Launch like zoo_spec:
 `bin/zoo_spec_job.sh` style with `rdagent zoo_fm --parent <xs stem> --loop-n N`.
+
+## Acceptance and what the LLM sees (2026-11-27)
+
+Acceptance is zoo-opt's `research_opt/opt_gate.decide()` (`ZOO_GATE_DIR`, default `~/zoo-opt/research_opt`), via
+`gate.py`: a candidate must first clear DEV Sharpe >= best + 0.05 (no VAL query spent otherwise); then one VAL query
+is charged (`charge_val_query`, max 3 per strategy and `ZOO_VAL_ROUND`, default one round per run; the loop stops
+when the budget is used) and `decide()` runs on the sealed record. The LLM gets the DEV-only agent view
+(`local_eval.py --dev-only`: no VAL, no gate booleans, no verdict) and the gate's pass/fail with coarse reasons.
+VAL numbers live only in `$ZOO_WORK/sealed/` (evaluator work dir and per-spec sealed records, incl. BTC beta).
