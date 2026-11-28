@@ -22,12 +22,29 @@ ARM_TASK = {
                  "holding_bars 12 and 24 are both one cohort; 48 = two overlapping daily books.",
 }
 
+TS_ARM_TASK = {
+    "factor": "Propose ONE new factor (a ts x symbol score) and say which sleeve score it should enter and how (it is "
+              "blended into that sleeve by combine(), which you rewrite together with the factor), or replace the "
+              f"weakest factor if the library has {fm.MAX_FACTORS}. It must be economically different from the "
+              "existing factors.",
+    "model": "Propose ONE change of how the factors are combined into the sleeve scores. " + fm.TS_MODEL_GUIDE,
+    "portfolio": "Propose ONE change of portfolio construction only (no factor or model change): universe size, names "
+                 "per side, cohort / clock schedule, sleeve budgets, risk filters, or the numeric params they use. "
+                 + fm.TS_PORTFOLIO_GUIDE,
+}
+
+
+def arm_task(state: dict, arm: str) -> str:
+    return (TS_ARM_TASK if fm.is_ts_state(state) else ARM_TASK)[arm]
+
+
 SYSTEM = """You are a senior crypto quant researcher running a factor + model research loop. Each iteration changes
 exactly one layer (the one requested). Respond with a JSON object with keys: hypothesis (the concrete change),
 reason (mechanism and why it should raise the DEV objective), concise_reason, concise_observation,
 concise_justification, concise_knowledge (a reusable "if ... then ..." lesson). For the portfolio layer also give
 "spec_updates" (dict of SPEC keys) and "param_updates" (dict of params); for the factor layer give "factor_name"
-(snake_case) and optionally "replace" (an existing factor name)."""
+(snake_case) and optionally "replace" (an existing factor name). When the decomposition has a portfolio() function
+(ts engine), give no spec_updates: the portfolio change is written as code, numeric params go in "param_updates"."""
 
 
 def best(trace: Trace, scen):
@@ -62,10 +79,18 @@ def history_text(trace: Trace, n: int) -> str:
 
 def state_text(state: dict) -> str:
     fac = "\n\n".join(state["factors"].values())
-    return (f"## Portfolio (SPEC without params)\n{json.dumps(state['spec'], default=str)[:1500]}\n"
-            f"## params\n{json.dumps(state['params'])}\n## Factor library\n```python\n{fac}\n```\n"
-            f"(fac_parent calls the parent spec's signal, shown below as _parent_signal)\n"
-            f"## Model\n```python\n{state['model']}\n```")
+    spec = {k: v for k, v in state["spec"].items() if k not in ("assumptions", "leakage_notes", "variants")}
+    out = (f"## SPEC (without params)\n{json.dumps(spec, default=str)[:1500]}\n"
+           f"## params\n{json.dumps(state['params'])}\n")
+    if state.get("helpers"):
+        out += f"## Shared helpers (fixed)\n```python\n{state['helpers']}\n```\n"
+    out += f"## Factor library\n```python\n{fac}\n```\n"
+    if not fm.is_ts_state(state):
+        out += "(fac_parent calls the parent spec's signal, shown below as _parent_signal)\n"
+    out += f"## Model\n```python\n{state['model']}\n```"
+    if fm.is_ts_state(state):
+        out += f"\n## Portfolio construction\n```python\n{state['portfolio']}\n```"
+    return out
 
 
 class ZooFMHypothesisGen(HypothesisGen):
@@ -77,7 +102,7 @@ class ZooFMHypothesisGen(HypothesisGen):
         user = (f"{self.scen.get_scenario_all_desc()}\n\n# Parent spec (base)\n```python\n{self.scen.parent_code}\n```\n"
                 f"# Current best decomposition\n{state_text(state)}\n# Its evaluation\n{ev.brief(view)}\n\n"
                 f"# Recent iterations\n{history_text(trace, S.history_n)}\n\n# Layer to change now: {arm}\n"
-                f"{ARM_TASK[arm]}")
+                f"{arm_task(state, arm)}")
         d = json.loads(llm.chat(user, SYSTEM, json_mode=True))
         h = Hypothesis(hypothesis=str(d.get("hypothesis", "")), reason=str(d.get("reason", "")),
                        concise_reason=str(d.get("concise_reason", "")),

@@ -49,7 +49,12 @@ class ZooRDLoop(RDLoop):
         logger.info(f"parent baseline: {ev.brief(scen.parent_view)}")
         if isinstance(setting, ZooFMPropSetting):
             from rdagent.scenarios.zoo import fm
-            scen.fm_seed = fm.seed_from_parent(scen.parent_code)
+            if fm.parent_engine(scen.parent_code) == "xs":
+                scen.fm_seed = fm.seed_from_parent(scen.parent_code)
+            else:  # ts engine with cross-sectional logic: one-off LLM split, verified to reproduce the parent exactly
+                from rdagent.scenarios.zoo.decompose import decompose_ts
+                scen.fm_seed = decompose_ts(setting.parent, scen.parent_code,
+                                            Path(RD_AGENT_SETTINGS.workspace_path) / "zoo_split")
 
 
 def main(parent: str | None = None, path=None, step_n: int | None = None, loop_n: int | None = None,

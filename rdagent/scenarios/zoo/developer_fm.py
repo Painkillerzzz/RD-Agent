@@ -42,7 +42,8 @@ class ZooFMCoder(Developer[ZooSpecExperiment]):
         spec_path = Path(ws.workspace_path) / f"{task.stem}.py"
         base = exp.fm_base_state
 
-        if arm == "portfolio":
+        ts = fm.is_ts_state(base)
+        if arm == "portfolio" and not ts:
             st = {**base, "spec": dict(base["spec"]), "params": dict(base["params"])}
             for k, v in (extra.get("spec_updates") or {}).items():
                 if k in ("rebalance", "holding_bars", "n_groups", "weighting", "direction"):
@@ -57,8 +58,14 @@ class ZooFMCoder(Developer[ZooSpecExperiment]):
             if name == "parent" or name in base["factors"]:
                 name = f"{name}_{len(base['factors'])}"
             want = f"def fac_{name}(bundle, params) -> pd.DataFrame  (ts x symbol, same index/columns as close)"
-        else:
-            want = "def combine(F, bundle, params) -> pd.DataFrame  (" + fm.MODEL_GUIDE + ")"
+            if ts:
+                want += ("\nand, in the same block, the full updated def combine(F, bundle, params) -> dict that "
+                         f"blends fac_{name} into the sleeve(s) named in the change (" + fm.TS_MODEL_GUIDE + ")")
+        elif arm == "model":
+            want = ("def combine(F, bundle, params) -> dict  (" + fm.TS_MODEL_GUIDE + ")" if ts else
+                    "def combine(F, bundle, params) -> pd.DataFrame  (" + fm.MODEL_GUIDE + ")")
+        else:  # ts portfolio: rewritten as code, numeric params may change too
+            want = "def portfolio(S, F, bundle, params) -> pd.DataFrame  (" + fm.TS_PORTFOLIO_GUIDE + ")"
         prompt = (f"{self.scen.get_scenario_all_desc(simple_background=True)}\n\n# Current decomposition\n"
                   f"{state_text(base)}\n\n# Change to implement ({arm})\n{task.description}\n\n# Write\n{want}")
         msgs: list = []
@@ -69,14 +76,29 @@ class ZooFMCoder(Developer[ZooSpecExperiment]):
             if arm == "factor":  # the LLM may name the function differently: force the assigned name
                 code = re.sub(r"^def fac_\w+\(", f"def fac_{name}(", code, count=1, flags=re.M)
             st = {**base, "factors": dict(base["factors"]), "params": {**base["params"], **newp}}
-            if arm == "factor":
+            if ts and arm == "portfolio":
+                for k, v in (extra.get("param_updates") or {}).items():
+                    if k in st["params"] and isinstance(v, (int, float)) and not isinstance(v, bool):
+                        st["params"][k] = v
+            fns = {}
+            if ts:
+                try:
+                    fns = fm.split_functions(code)
+                except SyntaxError:
+                    fns = {}
+            if ts and arm == "factor" and "combine" in fns:  # the factor block also carries the rewired combine
+                st["model"] = fns.pop("combine")
+                code = "".join(fns.values())
+            if arm == "portfolio" and ts:
+                st["portfolio"] = code
+            elif arm == "factor":
                 rep = extra.get("replace")
                 if rep in st["factors"] and rep != "parent":
                     st["factors"].pop(rep)
                 elif len(st["factors"]) >= fm.MAX_FACTORS:
                     st["factors"].pop([n for n in st["factors"] if n != "parent"][0])
                 st["factors"][name] = code
-            else:
+            elif arm == "model":
                 st["model"] = code
             ok, log = self._check(st, task.stem, spec_path, ws)
             logger.info(f"zoo_fm coder [{arm}] try {i + 1}: check ok={ok}")

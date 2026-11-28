@@ -46,7 +46,7 @@ Use `bin/zoo_spec_job.sh`: it detaches from ssh, has a hard timeout, and writes 
 at the expected finish time (eval ≈ 17 min per round) and read only the status file plus a log tail in one short ssh
 call. Never keep an ssh connection open to wait, and never rely on a session "remembering" to look later.
 
-## Factor + model loop (`rdagent zoo_fm`, xs parents only)
+## Factor + model loop (`rdagent zoo_fm`)
 
 Keeps RD-Agent(Q)'s factor/model co-evolution but evaluates with the zoo evaluator. The parent signal becomes factor
 `parent`; the model starts as an equal-weight rank mean; the portfolio is the parent SPEC. Each iteration a Gaussian
@@ -56,6 +56,17 @@ code). `fm.assemble` renders one ordinary spec module, so zoo_val.check, the eva
 Unlike the qlib bandit, the reward is the score improvement over the best at proposal time (failures = -0.5), and
 the bandit state is replayed from the trace, so resumed sessions stay consistent. Launch like zoo_spec:
 `bin/zoo_spec_job.sh` style with `rdagent zoo_fm --parent <xs stem> --loop-n N`.
+
+**ts-engine parents with cross-sectional logic** (many zoo crypto specs rank assets but run on the ts engine to hold
+fixed contract units; see the project's xs/ts classification, not the `engine` column) are split once by the LLM
+(`decompose.py`): `fac_<name>` = the raw scores the parent ranks on, `combine(F, ...)` returns a dict of sleeve
+scores (initially a plain routing), `portfolio(S, F, bundle, params)` reproduces the parent's universe, names per
+side, cohorts/clocks and sleeve budgets; private helpers are kept as a fixed shared layer. The split is accepted
+only if it passes zoo_val.check and reproduces the parent's positions exactly (`tools/repro_check.py`: synthetic
+30-symbol hourly fixture, default params + two SPEC variants, 2 seeds, max |diff| <= 1e-9; no real data, so no
+DEV/VAL information is involved), with up to 3 LLM tries fed with the diff report. It is cached in
+`<work>/fm_seeds/<parent>.json`. In ts mode the factor arm writes the new factor together with the rewired
+`combine`, the model arm rewrites `combine`, and the portfolio arm rewrites `portfolio()` (plus numeric params).
 
 ## Acceptance and what the LLM sees (2026-11-27)
 

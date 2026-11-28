@@ -68,7 +68,8 @@ ZOO_PROP_SETTING = ZooPropSetting()
 
 
 class ZooFMPropSetting(ZooPropSetting):
-    """Factor + model + portfolio loop (bandit picks the layer). Same ZOO_* settings, xs parents only."""
+    """Factor + model + portfolio loop (bandit picks the layer). Same ZOO_* settings. xs parents directly; ts parents
+    with cross-sectional logic after a one-off LLM split that must reproduce the parent exactly (decompose.py)."""
 
     hypothesis_gen: str = "rdagent.scenarios.zoo.proposal_fm.ZooFMHypothesisGen"
     hypothesis2experiment: str = "rdagent.scenarios.zoo.proposal_fm.ZooFMHypothesis2Experiment"
